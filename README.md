@@ -1,149 +1,89 @@
-# 🌊 Bathyx
+# Bathyx
 
-An interactive, GPU-accelerated ocean floor atlas that renders Earth's bathymetric terrain in real time. Built with SvelteKit, Three.js, and custom GLSL shaders.
+An interactive 3D ocean floor atlas that visualizes the bathymetric terrain of Earth's oceans. Explore the Mariana Trench, Mid-Atlantic Ridge, Hawaiian seamounts, and hydrothermal vent fields in a real-time WebGL globe.
 
-## Overview
+## How It Works
 
-Bathyx places you at the center of a 3D globe and lets you explore the ocean floor — from continental shelves to abyssal trenches, mid-ocean ridges to hydrothermal vents. Drag to rotate, scroll to zoom, and click on any feature to learn more.
+Bathyx renders Earth's ocean floor as a 3D sphere using procedural terrain generation. The globe combines fractal Brownian motion noise with geographically accurate feature placement to create a scientifically grounded visualization of ocean bathymetry.
 
-The terrain is procedurally generated using fractal Brownian motion noise, calibrated against real-world bathymetric data (GEBCO-derived depth profiles). Ocean features — 10 major trenches, 5 ridges, 8 seamounts, and 10 hydrothermal vent fields — are placed at their real geographic coordinates.
+### Terrain Generation
 
-## Features
+The ocean floor is modeled as a sphere with radius 50 units, where each vertex is displaced based on depth. The terrain uses:
 
-- **Procedural bathymetric terrain** — fractal noise terrain generation with realistic depth profiles (continental shelf → slope → abyssal plain → hadal zone)
-- **10 oceanic trenches** — Mariana, Tonga, Philippine, Kermadec, Japan, Puerto Rico, Sunda, Peru-Chile, Aleutian, South Sandwich (real coordinates and depths)
-- **5 mid-ocean ridges** — Mid-Atlantic Ridge, East Pacific Rise, Pacific-Antarctic, Central Indian, Gakkel Ridge with spreading rates
-- **8 seamounts** — Mauna Kea, Seine Guyot, Great Meteor, Emperor chain, and more with type classification (guyot/shield/volcanic/coral)
-- **10 hydrothermal vent fields** — Black smokers, white smokers, warm seeps, lava-flow vents with particle effects and real temperatures
-- **Custom GLSL shaders** — depth-based color interpolation, bioluminescence shimmer, atmospheric fog, diffuse lighting
-- **Interactive vent particles** — GPU point sprites with additive blending, animated along surface normals
-- **Lat/lon grid overlay** — toggleable great-circle grid at 30° intervals
-- **Feature selection** — click any trench, ridge, seamount, or vent to see detailed info
-- **Layer controls** — toggle visibility of grid, trenches, ridges, seamounts, and vents independently
-- **Auto-rotate** — smooth idle rotation animation
-- **Planetarium camera** — origin-locked perspective with azimuth/altitude drag, scroll zoom, and pinch-zoom on mobile
+- **Fractal Brownian Motion (FBM):** Six octaves of value noise with smoothstep interpolation produce natural-looking ocean floor topography. Each octave doubles the frequency and halves the amplitude, creating detail at multiple scales.
+- **Continental shelf modeling:** A low-frequency noise layer determines land vs. ocean regions. Areas above a threshold are rendered as elevated terrain (positive depth), while below forms the ocean basins.
+- **Geographic feature injection:** Real-world coordinates for trenches, ridges, seamounts, and vents are mapped onto the sphere. Proximity functions create smooth influence gradients around each feature, blending procedural noise with geographic accuracy.
 
-## Tech Stack
+### Bathymetric Features
 
-| Layer | Technology |
-|-------|-----------|
-| Framework | SvelteKit + TypeScript |
-| Rendering | Three.js (WebGL2, custom ShaderMaterial) |
-| Shaders | GLSL ES 3.0 (vertex + fragment) |
-| Build | Vite + @sveltejs/adapter-static |
-| Terrain | Procedural FBM noise with real bathymetric calibration |
-| Features | Real geographic coordinates (NOAA/GEBCO-derived) |
+**Trenches** — The deepest ocean features. Modeled as elongated depressions with influence radii of ~3° around:
+- Mariana Trench (143°E, 12°N) — max depth ~11,000m
+- Tonga Trench (174°W, 24°S) — max depth ~10,800m  
+- Peru-Chile Trench (73°W, 20°S) — max depth ~8,000m
 
-## Project Structure
+**Ridges** — Mid-ocean spreading centers rendered as elevated terrain:
+- Mid-Atlantic Ridge (~35°W, N-S axis)
+- East Pacific Rise (~112°W, N-S axis)
+
+**Seamounts** — Isolated volcanic peaks rising from the ocean floor:
+- Hawaiian hotspot chain (155.5°W, 19.8°N)
+
+**Hydrothermal Vents** — Particle-based visualization of deep-sea vent fields along ridge systems.
+
+### Rendering Pipeline
+
+1. **Mesh generation:** A latitude-longitude grid (180×180 vertices) is mapped onto the sphere. Each vertex's radius is displaced by `50 + depth/200`, where depth comes from the FBM + feature system.
+
+2. **Color mapping:** Depth is normalized and mapped through a five-zone color palette:
+   - Shallow shelf (0 to −200m): cyan-blue
+   - Continental slope (−200 to −4000m): medium blue
+   - Deep ocean (−4000 to −6000m): dark blue-purple
+   - Hadal zone (−6000m+): near-black purple
+   - Land: sandy brown
+
+3. **Custom shaders:** GLSL vertex and fragment shaders handle depth-based coloring, light direction, and atmospheric density effects. The vertex shader passes position and color data; the fragment shader applies lighting.
+
+4. **Feature rendering:** Trenches and ridges are drawn as colored line geometry (Line2 with width). Seamounts are glowing markers. Vents are animated particle systems.
+
+### Camera System
+
+A planetarium-style orbit camera allows exploration:
+- **Drag** to orbit (azimuth + altitude)
+- **Scroll** to zoom (clamped between 510 and 2000 units)
+- **Pinch** on touch devices
+- **Auto-rotate** for idle viewing
+- **Raycasting** detects cursor position on the sphere, computing lon/lat/depth in real-time
+
+### Architecture
 
 ```
 src/
-├── lib/
-│   ├── astronomy/
-│   │   └── coordinates.ts      # lon/lat ↔ 3D vector, haversine, path interpolation
-│   ├── catalog/
-│   │   ├── types.ts            # OceanTrench, Seamount, HydrothermalVent, OceanRidge
-│   │   ├── data.ts             # Real ocean feature catalog (10 trenches, 5 ridges, ...)
-│   │   └── terrain.ts          # FBM noise terrain generator with depth profiles
-│   ├── engine/
-│   │   └── OceanControls.ts    # Planetarium camera (drag, zoom, pinch, flyTo)
-│   ├── renderer/
-│   │   ├── TerrainRenderer.ts   # THREE.Mesh + custom ShaderMaterial for terrain
-│   │   ├── FeatureRenderer.ts   # Trench/ridge/seamount/vent overlay rendering
-│   │   ├── GridRenderer.ts      # Lat/lon grid line overlay
-│   │   └── shaders.ts          # GLSL vertex/fragment shaders
-│   └── stores/
-│       └── ocean.ts            # Svelte reactive state (layers, cursor, selection)
 ├── routes/
-│   ├── +page.svelte            # Main canvas + HUD overlay + controls
-│   ├── +layout.svelte          # App shell
-│   └── +layout.ts              # SSR/prerender config
-└── app.html                    # HTML template
+│   ├── +page.svelte          # Main scene: Three.js setup, render loop, HUD
+│   ├── +layout.svelte        # CSS import
+│   └── +layout.ts            # SSR disabled, prerender enabled
+├── lib/
+│   ├── catalog/
+│   │   ├── terrain.ts        # FBM noise, depth calculation, mesh generation
+│   │   ├── data.ts           # Ocean feature catalog (trenches, ridges, etc.)
+│   │   └── types.ts          # TypeScript interfaces
+│   ├── renderer/
+│   │   ├── TerrainRenderer.ts # ShaderMaterial + BufferGeometry for terrain
+│   │   ├── GridRenderer.ts   # Lat/lon grid overlay
+│   │   ├── FeatureRenderer.ts # Trench lines, ridge lines, seamount markers, vent particles
+│   │   └── shaders.ts        # GLSL vertex/fragment shaders
+│   ├── engine/
+│   │   └── OceanControls.ts  # Orbit camera with flyTo animation
+│   └── stores/
+│       └── ocean.ts          # Svelte stores for UI state
 ```
 
-## Terrain Generation
+### Key Design Decisions
 
-Ocean floor depth is computed procedurally at each (lon, lat) point using:
+**Procedural + geographic hybrid:** Pure noise looks unrealistic; pure real data requires massive datasets. The hybrid approach — noise for base terrain, geographic coordinates for features — achieves visual fidelity with zero external dependencies.
 
-1. **Base noise** — FBM (6 octaves) for continental shelf and abyssal plain topology
-2. **Ridge influence** — Gaussian proximity falloff near mid-ocean ridge axes (elevated +2000m)
-3. **Trench influence** — Gaussian proximity falloff near trench paths (deepened -5000m)
-4. **Seamount influence** — Gaussian bump at seamount locations (elevated +4000m)
-5. **Fine detail** — 3-octave FBM at higher frequency (±500m perturbation)
+**Sphere rendering:** Ocean floors are mapped onto a sphere (not a flat plane) to match Earth's geometry. The radius formula `50 + depth/200` compresses the 11km depth range into visually distinguishable relief without distorting the sphere shape.
 
-The terrain mesh is generated as indexed triangles on a 180×180 grid, converted to spherical coordinates (radius from center encodes depth).
+**WebGL shaders:** Custom shaders (rather than MeshStandardMaterial) give direct control over depth-based coloring and allow atmospheric effects without a post-processing pass.
 
-## Shader Pipeline
-
-**Vertex shader:**
-- Transforms terrain vertices through model-view-projection matrix
-- Applies subtle wave displacement for shallow areas (sin/cos oscillation)
-- Passes depth, color, normal, and position to fragment shader
-
-**Fragment shader:**
-- Depth-based color palette (cyan shelf → blue slope → dark purple abyss)
-- Simple diffuse lighting from a directional light source
-- Bioluminescence shimmer effect in deep areas (sin-wave glow modulation)
-- Distance-based atmosphere fade near sphere edges
-
-## Ocean Features
-
-### Trenches (10)
-| Name | Max Depth | Length | Region |
-|------|-----------|--------|--------|
-| Mariana | 10,994m | 2,550 km | Pacific |
-| Tonga | 10,823m | 860 km | Pacific |
-| Philippine | 10,540m | 1,320 km | Pacific |
-| Kermadec | 10,047m | 1,000 km | Pacific |
-| Japan | 9,000m | 800 km | Pacific |
-| Puerto Rico | 8,376m | 800 km | Atlantic |
-| Sunda | 7,725m | 3,200 km | Indian |
-| Peru-Chile | 8,065m | 5,900 km | Pacific |
-| Aleutian | 7,679m | 3,400 km | Pacific |
-| South Sandwich | 8,264m | 965 km | Atlantic |
-
-### Hydrothermal Vents (10)
-| Name | Depth | Temp | Type |
-|------|-------|------|------|
-| 13°N Hydrothermal Field | 2,500m | 380°C | Black smoker |
-| Lost City | 750m | 91°C | Warm seep |
-| Rainbow Vent Field | 2,300m | 365°C | Black smoker |
-| TAG Hydrothermal Field | 3,670m | 363°C | Black smoker |
-| PACMANUS Vent Field | 1,700m | 350°C | Black smoker |
-| East Pacific Rise 21°S | 2,600m | 355°C | Black smoker |
-| Ashadze Vent Field | 4,080m | 305°C | Black smoker |
-| Lau Basin Vents | 1,750m | 360°C | Black smoker |
-| Brothers Volcano | 1,850m | 302°C | Black smoker |
-| Pele's Vents | 1,550m | 310°C | Lava-flow |
-
-## Getting Started
-
-```bash
-npm install
-npm run dev
-```
-
-Open http://localhost:5174
-
-## Build
-
-```bash
-npm run build
-npm run preview
-```
-
-## Roadmap
-
-- [ ] Real GEBCO/ETOPO bathymetric grid data (30 arc-second resolution)
-- [ ] Plate boundary visualization (convergent/divergent/transform)
-- [ ] Ocean current particle flow simulation
-- [ ] Mariana Challenger Deep submersible dive path
-- [ ] Seafloor sediment type classification overlay
-- [ ] Earthquake/seismicity real-time feed (USGS API)
-- [ ] Mobile touch gesture refinements
-- [ ] Depth-of-field camera effects
-- [ ] Biome-based coloring (abyssal plain, continental shelf, reef)
-
-## License
-
-MIT © 2026 Tirta Dhila
+**Zero SSR:** The app uses `ssr = false` because Three.js requires the DOM. `prerender = true` with `adapter-static` generates a static SPA that can be served from any CDN.

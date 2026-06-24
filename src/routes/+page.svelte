@@ -42,31 +42,25 @@
   let clock: THREE.Clock;
   let elapsed = 0;
 
-  let featureInfoVisible = $state(false);
+  let featureInfoVisible = false;
   let infoPanel: {
     type: string;
     name: string;
     description: string;
     details: string[];
-  } | null = $state(null);
+  } | null = null;
 
-  // Store values as state
-  let gridOn = $state(true);
-  let trenchesOn = $state(true);
-  let ridgesOn = $state(true);
-  let seamountsOn = $state(true);
-  let ventsOn = $state(true);
-  let autoRot = $state(false);
-  let cursorCoords = $state('');
-  let cursorDepthStr = $state('');
+  // Store subscriptions — update local vars for template
+  let gridOn = true;
+  let trenchesOn = true;
+  let ridgesOn = true;
+  let seamountsOn = true;
+  let ventsOn = true;
+  let autoRot = false;
+  let cursorCoords = '';
+  let cursorDepthStr = '';
 
-  let unsubGrid: () => void;
-  let unsubTrenches: () => void;
-  let unsubRidges: () => void;
-  let unsubSeamounts: () => void;
-  let unsubVents: () => void;
-  let unsubAutoRotate: () => void;
-  let unsubCursorInfo: () => void;
+  let unsub: (() => void)[] = [];
 
   onMount(() => {
     scene = new THREE.Scene();
@@ -106,17 +100,17 @@
     const ambient = new THREE.AmbientLight(0x202040, 0.5);
     scene.add(ambient);
 
-    // Subscribe to stores
-    unsubGrid = showGrid.subscribe(v => { gridOn = v; grid?.setVisible(v); });
-    unsubTrenches = showTrenches.subscribe(v => { trenchesOn = v; if (trenchGroup) trenchGroup.visible = v; });
-    unsubRidges = showRidges.subscribe(v => { ridgesOn = v; if (ridgeGroup) ridgeGroup.visible = v; });
-    unsubSeamounts = showSeamounts.subscribe(v => { seamountsOn = v; if (seamountGroup) seamountGroup.visible = v; });
-    unsubVents = showVents.subscribe(v => { ventsOn = v; if (ventGroup) ventGroup.visible = v; });
-    unsubAutoRotate = autoRotateStore.subscribe(v => { autoRot = v; });
-    unsubCursorInfo = cursorInfo.subscribe(info => {
+    // Store subscriptions
+    unsub.push(showGrid.subscribe(v => { gridOn = v; grid?.setVisible(v); }));
+    unsub.push(showTrenches.subscribe(v => { trenchesOn = v; if (trenchGroup) trenchGroup.visible = v; }));
+    unsub.push(showRidges.subscribe(v => { ridgesOn = v; if (ridgeGroup) ridgeGroup.visible = v; }));
+    unsub.push(showSeamounts.subscribe(v => { seamountsOn = v; if (seamountGroup) seamountGroup.visible = v; }));
+    unsub.push(showVents.subscribe(v => { ventsOn = v; if (ventGroup) ventGroup.visible = v; }));
+    unsub.push(autoRotateStore.subscribe(v => { autoRot = v; }));
+    unsub.push(cursorInfo.subscribe(info => {
       cursorCoords = info.coords;
       cursorDepthStr = info.depth;
-    });
+    }));
 
     container.addEventListener('pointermove', onPointerMove);
     container.addEventListener('click', onClick);
@@ -129,13 +123,7 @@
 
   onDestroy(() => {
     if (animationId) cancelAnimationFrame(animationId);
-    unsubGrid?.();
-    unsubTrenches?.();
-    unsubRidges?.();
-    unsubSeamounts?.();
-    unsubVents?.();
-    unsubAutoRotate?.();
-    unsubCursorInfo?.();
+    unsub.forEach(fn => fn());
     container?.removeEventListener('pointermove', onPointerMove);
     container?.removeEventListener('click', onClick);
     terrain?.dispose();
@@ -256,7 +244,7 @@
 
   {#if featureInfoVisible && infoPanel}
     <div class="info-panel">
-      <button class="close-btn" onclick={closeInfo}>×</button>
+      <button class="close-btn" on:click={closeInfo}>×</button>
       <div class="info-type {infoPanel.type}">{infoPanel.type}</div>
       <h2>{infoPanel.name}</h2>
       <p>{infoPanel.description}</p>
@@ -269,12 +257,12 @@
   {/if}
 
   <div class="hud-controls">
-    <button class="toggle" class:active={gridOn} onclick={toggleGrid}>Grid</button>
-    <button class="toggle" class:active={trenchesOn} onclick={toggleTrenches}>Trenches</button>
-    <button class="toggle" class:active={ridgesOn} onclick={toggleRidges}>Ridges</button>
-    <button class="toggle" class:active={seamountsOn} onclick={toggleSeamounts}>Seamounts</button>
-    <button class="toggle" class:active={ventsOn} onclick={toggleVents}>Vents</button>
-    <button class="toggle" class:active={autoRot} onclick={toggleAutoRotate}>↻ Auto</button>
+    <button class="toggle" class:active={gridOn} on:click={toggleGrid}>Grid</button>
+    <button class="toggle" class:active={trenchesOn} on:click={toggleTrenches}>Trenches</button>
+    <button class="toggle" class:active={ridgesOn} on:click={toggleRidges}>Ridges</button>
+    <button class="toggle" class:active={seamountsOn} on:click={toggleSeamounts}>Seamounts</button>
+    <button class="toggle" class:active={ventsOn} on:click={toggleVents}>Vents</button>
+    <button class="toggle" class:active={autoRot} on:click={toggleAutoRotate}>↻ Auto</button>
   </div>
 
   <div class="hud-legend">
